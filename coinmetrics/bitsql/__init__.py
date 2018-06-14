@@ -2,6 +2,7 @@ import math
 import threading
 import time
 import traceback
+from datetime import datetime
 from coinmetrics.utils.log import Log
 from coinmetrics.utils import pipelines
 from coinmetrics.utils.eta import BlockCollectionETA
@@ -26,6 +27,18 @@ def dbObjectsFactory(asset, db):
 
 	registry = {
 		"btc": bitcoinClone("btc"),
+		"bch": [
+			lambda db: BitcoinSchema("bch", db), 
+			lambda db, schema: BitcoinQuery(db, schema), 
+			lambda db, schema: BitcoinExporter(db, schema),
+			lambda db, query: DailyAggregator(db, query, datetime(year=2017, month=8, day=3))
+		],
+		"btg": [
+			lambda db: BitcoinSchema("btg", db), 
+			lambda db, schema: BitcoinQuery(db, schema), 
+			lambda db, schema: BitcoinExporter(db, schema),
+			lambda db, query: DailyAggregator(db, query, datetime(year=2017, month=11, day=16))
+		],
 		"ltc": bitcoinClone("ltc"),
 		"vtc": bitcoinClone("vtc"),
 		"doge": bitcoinClone("doge"),
@@ -65,6 +78,8 @@ def dbObjectsFactory(asset, db):
 def nodeFactory(asset, *args):
 	registry = {
 		"btc": lambda: BitcoinNode(*args),
+		"bch": lambda: BitcoinNode(*args),
+		"btg": lambda: BitcoinNode(*args),
 		"ltc": lambda: BitcoinNodeBase(*args),
 		"vtc": lambda: BitcoinNodeBase(*args),
 		"doge": lambda: DogecoinNode(*args),
@@ -122,7 +137,7 @@ def runExport(asset, nodeConfig, dbConfig, loop=False, lag=60 * 60 * 2):
 	else:
 		while True:
 			keyboardInterrupt = False
-			
+
 			try:
 				db = postgresFactory(dbConfig)
 				result, keyboardInterrupt = proc(db)

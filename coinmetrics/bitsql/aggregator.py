@@ -77,33 +77,45 @@ class DailyRewardStatistic(SimpleStatistics):
 	proc = "getRewardBetween"
 
 class DailyAverageDifficultyStatistic(SimpleStatistics):
-	name = "difficulty"
+	name = "average_difficulty"
 	dataType = "FLOAT"
 	proc = "getAverageDifficultyBetween"
 
 class DailyMedianFeeStatistic(SimpleStatistics):
-	name = "medianFee"
+	name = "median_fee"
 	dataType = "BIGINT"
 	proc = "getMedianFeeBetween"
 
 class DailyMedianTransactionValueStatistic(SimpleStatistics):
-	name = "medianTxValue"
+	name = "median_tx_value"
 	dataType = "BIGINT"
 	proc = "getMedianTransactionValueBetween"
 
 class DailyPaymentCountStatistic(SimpleStatistics):
-	name = "paymentCount"
+	name = "payment_count"
 	dataType = "BIGINT"
 	proc = "getPaymentCountBetween"
+
+class DailyBlockSizeStatistic(SimpleStatistics):
+	name = "block_size"
+	dataType = "BIGINT"
+	proc = "getBlockSizeBetween"
+
+class DailyHeuristicalTxVolumeStatistic(SimpleStatistics):
+	name = "heuristical_volume"
+	dataType = "DECIMAL(32)"
+	proc = "getHeuristicalOutputVolumeBetween"
 
 
 class DailyAggregator(object):
 
-	def __init__(self, dbAccess, query):
+	def __init__(self, dbAccess, query, minDate=None):
 		self.dbAccess = dbAccess
 		self.query = query
+		self.minDate = minDate
 		self.groups = {}
 		self.addGroup("default")
+		self.addGroup("heuristic")
 		self.createDailyStatistics()
 
 	def createDailyStatistics(self):
@@ -116,6 +128,9 @@ class DailyAggregator(object):
 		self.addStatistic(DailyMedianFeeStatistic(self.dbAccess, self.query))
 		self.addStatistic(DailyPaymentCountStatistic(self.dbAccess, self.query))
 		self.addStatistic(DailyRewardStatistic(self.dbAccess, self.query))
+		self.addStatistic(DailyBlockSizeStatistic(self.dbAccess, self.query))
+
+		self.addStatistic(DailyHeuristicalTxVolumeStatistic(self.dbAccess, self.query), "heuristic")
 
 	def addGroup(self, name):
 		if name not in self.groups:
@@ -139,6 +154,8 @@ class DailyAggregator(object):
 				print "no blocks found for %s" % self.query.getAsset()
 				return
 			minBlockTime = minBlockTime.replace(hour=0, minute=0, second=0, microsecond=0)
+			if self.minDate is not None:
+				minBlockTime = max(minBlockTime, self.minDate)
 			maxBlockTime = maxBlockTime.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
 			dateSet = set([minBlockTime + timedelta(days=i) for i in xrange((maxBlockTime - minBlockTime).days + 1)])
 			shouldSave = True

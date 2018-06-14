@@ -77,7 +77,7 @@ class BitcoinSchema(object):
 	def vacuum(self):
 		isolationLevel = self.dbAccess.connection.isolation_level
 		self.dbAccess.connection.set_isolation_level(0)
-		self.dbAccess.queryNoReturnNoCommit("VACUUM %s" % self.getOutputsTableName())
+		self.dbAccess.queryNoReturnNoCommit("VACUUM ANALYZE %s" % self.getOutputsTableName())
 		self.dbAccess.connection.set_isolation_level(isolationLevel)
 
 

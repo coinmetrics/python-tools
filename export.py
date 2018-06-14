@@ -1,5 +1,4 @@
 import argparse
-import json
 from coinmetrics.utils.config import readConfigFile
 from coinmetrics.bitsql import runExport, dbObjectsFactory, postgresFactory
 from coinmetrics.bitsql.constants import SUPPORTED_ASSETS

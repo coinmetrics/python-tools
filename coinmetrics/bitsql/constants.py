@@ -38,4 +38,4 @@ BLOCK_TIMES = {
 	"dcr": 150,
 }
 
-SUPPORTED_ASSETS = ["btc", "ltc", "vtc", "dash", "doge", "zec", "dgb", "xvg", "pivx", "dcr"]
+SUPPORTED_ASSETS = ["btc", "ltc", "vtc", "dash", "doge", "zec", "dgb", "xvg", "pivx", "dcr", "bch", "btg"]
