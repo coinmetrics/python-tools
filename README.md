@@ -1,5 +1,5 @@
 # python-tools
-This repository contains source code for tools used by coinmetrics.io to collect data from Bitcoin and its clones and forks. Currently, we support BTC, BCH, LTC, DOGE, ZEC, DCR, PIVX, XVG, DASH, VTC, DGB and BTG.
+This repository contains source code for tools used by coinmetrics.io to collect data from Bitcoin and its clones and forks. Currently, we support BTC, BCH, LTC, DOGE, ZEC, DCR, PIVX, XVG, DASH, VTC, DGB, BTG and two assets based on Omni protocol: USDT and MAID.
 
 ## Prerequisites
 Python 2.7, PostgreSQL 9 or 10, Python modules `psycopg2`, `requests`, `python-dateutil` and `future`.
