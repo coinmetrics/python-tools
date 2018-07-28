@@ -6,7 +6,6 @@ class PostgresAccess(object):
 	def __init__(self, dbHost, dbName, dbUser, dbPassword):
 		self.connection = psycopg2.connect("host=%s dbname=%s user=%s password=%s" % (dbHost, dbName, dbUser, dbPassword))
 		self.cursor = self.connection.cursor()
-		print "db connection opened"
 
 	def __del__(self):
 		self.close()
@@ -39,4 +38,3 @@ class PostgresAccess(object):
 		if self.connection is not None:
 			self.connection.close()
 			self.connection = None
-			print "db connection closed"

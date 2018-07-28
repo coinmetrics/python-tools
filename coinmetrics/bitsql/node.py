@@ -14,7 +14,7 @@ def outputValueToSatoshis(outputValue):
 		digits = int("".join(valuePieces))
 		value = digits * 10**(8 - fractionDigitCount)
 		naiveValue = float(outputValue) * 100000000.0
-		assert(abs(value - naiveValue) <= 32)
+		assert(abs(value - naiveValue) <= 1024)
 	else:
 		value = outputValue * 100000000
 	assert(value < 10**OUTPUT_VALUE_PRECISION)

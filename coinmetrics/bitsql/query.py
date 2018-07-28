@@ -11,6 +11,9 @@ class BitcoinQuery(object):
 	def getSchema(self):
 		return self.schema
 
+	def getAsset(self):
+		return self.schema.getAsset()
+
 	def getBlockHeight(self):
 		result = self.dbAccess.queryReturnOne("SELECT max(block_height) FROM %s" % self.schema.getBlocksTableName())[0]
 		return result if result is not None else 0
@@ -31,6 +34,27 @@ class BitcoinQuery(object):
 		result = self.dbAccess.queryReturnAll("SELECT block_height FROM " + self.blocksTable + " WHERE block_time <= %s", (maxTime,))
 		return [row[0] for row in result]
 
+	def getTransactionsBetween(self, minDate, maxDate):
+		return self.dbAccess.queryReturnAll("\
+			SELECT \
+				* \
+			FROM " + self.txTable + " WHERE \
+				(tx_time >= %s AND tx_time < %s)", (minDate, maxDate))
+
+	def getInputsBetween(self, minDate, maxDate):
+		return self.dbAccess.queryReturnAll("\
+			SELECT \
+				* \
+			FROM " + self.outputsTable + " WHERE \
+				(output_time_spent >= %s AND output_time_spent < %s)", (minDate, maxDate))
+
+	def getInputTxHashAndAddressesBetween(self, minDate, maxDate):
+		return self.dbAccess.queryReturnAll("\
+			SELECT \
+				output_spending_tx_hash, output_addresses \
+			FROM " + self.outputsTable + " WHERE \
+				(output_time_spent >= %s AND output_time_spent < %s)", (minDate, maxDate))
+
 	def getAverageDifficultyBetween(self, minDate, maxDate):
 		result = self.dbAccess.queryReturnOne("\
 			SELECT \
@@ -43,6 +67,14 @@ class BitcoinQuery(object):
 		result = self.dbAccess.queryReturnOne("\
 			SELECT \
 				SUM(block_size) \
+			FROM " + self.blocksTable + " WHERE \
+				block_time >= %s AND block_time < %s", (minDate, maxDate))
+		return result[0] if result[0] is not None else 0
+
+	def getBlockCountBetween(self, minDate, maxDate):
+		result = self.dbAccess.queryReturnOne("\
+			SELECT \
+				COUNT(*) \
 			FROM " + self.blocksTable + " WHERE \
 				block_time >= %s AND block_time < %s", (minDate, maxDate))
 		return result[0] if result[0] is not None else 0
@@ -316,6 +348,11 @@ class ZcashQuery(BitcoinQuery):
 		joinSplitResult = self.getJoinSplitsNegativeDiffValueBetween(minDate, maxDate)
 		return baseResult + joinSplitResult
 
+	def getHeuristicalOutputVolumeBetween(self, minDate, maxDate):
+		baseResult = super(ZcashQuery, self).getHeuristicalOutputVolumeBetween(minDate, maxDate)
+		joinSplitResult = self.getJoinSplitsNegativeDiffValueBetween(minDate, maxDate)
+		return baseResult + joinSplitResult		
+
 	def getJoinSplitsDiffValueBetween(self, minDate, maxDate):
 		result = self.dbAccess.queryReturnOne("\
 			SELECT \
@@ -461,6 +498,11 @@ class PivxQuery(BitcoinQuery):
 
 	def getOutputVolumeBetween(self, minDate, maxDate):
 		baseResult = super(PivxQuery, self).getOutputVolumeBetween(minDate, maxDate)
+		zerocoinMints = self.getZerocoinMintsVolumeBetween(minDate, maxDate, False)
+		return baseResult + zerocoinMints
+
+	def getHeuristicalOutputVolumeBetween(self, minDate, maxDate):
+		baseResult = super(PivxQuery, self).getHeuristicalOutputVolumeBetween(minDate, maxDate)
 		zerocoinMints = self.getZerocoinMintsVolumeBetween(minDate, maxDate, False)
 		return baseResult + zerocoinMints
 
@@ -732,6 +774,46 @@ class DecredQuery(BitcoinQuery):
 					output_addresses \
 				FROM " + self.outputsTable + " WHERE \
 					(output_time_created >= %s AND output_time_created < %s) AND output_type>1), \
+			i AS (\
+				SELECT \
+					output_spending_tx_hash, \
+					output_index, \
+					output_addresses \
+				FROM " + self.outputsTable + " WHERE \
+					(output_time_spent >= %s AND output_time_spent < %s)), \
+			t AS (\
+				SELECT \
+					tx_hash \
+				FROM " + self.txTable + " WHERE \
+					(tx_time >= %s AND tx_time < %s) AND tx_coinbase=false AND tx_vote=false AND tx_ticket=false) \
+			SELECT \
+				sum(o.output_value_satoshi) \
+			FROM o JOIN t ON \
+				o.output_tx_hash = t.tx_hash \
+			LEFT JOIN (\
+				SELECT \
+					o.output_tx_hash as change_output_tx_hash, \
+					o.output_index as change_output_index \
+				FROM o JOIN i ON \
+					(o.output_tx_hash = i.output_spending_tx_hash) AND \
+					((o.output_addresses && i.output_addresses) = true)) change ON \
+				o.output_tx_hash=change.change_output_tx_hash AND o.output_index=change.change_output_index \
+			WHERE change.change_output_tx_hash is NULL", (minDate, maxDate, minDate, maxDate, minDate, maxDate))
+		return result[0] if result[0] is not None else 0
+
+	def getHeuristicalOutputVolumeBetween(self, minDate, maxDate):
+		result = self.dbAccess.queryReturnOne("WITH \
+			o AS (\
+				SELECT \
+					output_tx_hash, \
+					output_index, \
+					output_value_satoshi, \
+					output_addresses \
+				FROM " + self.outputsTable + " WHERE \
+					(output_time_created >= %s AND output_time_created < %s) \
+					AND output_type>1 \
+					AND ((output_time_spent is NULL) OR \
+						 (EXTRACT(EPOCH FROM (output_time_spent - output_time_created)) > 2400))), \
 			i AS (\
 				SELECT \
 					output_spending_tx_hash, \

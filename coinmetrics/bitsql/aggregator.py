@@ -1,4 +1,5 @@
 from datetime import timedelta, datetime
+from coinmetrics.utils.eta import ETA
 
 class DailyStatistic(object):
 
@@ -7,7 +8,7 @@ class DailyStatistic(object):
 		self.dataType = dataType
 		self.dbAccess = dbAccess
 		self.query = query
-		self.asset = query.getSchema().getAsset()
+		self.asset = query.getAsset()
 		self.init()
 
 	def getName(self):
@@ -106,6 +107,11 @@ class DailyHeuristicalTxVolumeStatistic(SimpleStatistics):
 	dataType = "DECIMAL(32)"
 	proc = "getHeuristicalOutputVolumeBetween"
 
+class DailyBlockCountStatistic(SimpleStatistics):
+	name = "block_count"
+	dataType = "BIGINT"
+	proc = "getBlockCountBetween"
+
 
 class DailyAggregator(object):
 
@@ -115,13 +121,13 @@ class DailyAggregator(object):
 		self.minDate = minDate
 		self.groups = {}
 		self.addGroup("default")
-		self.addGroup("heuristic")
 		self.createDailyStatistics()
 
 	def createDailyStatistics(self):
 		self.addStatistic(DailyAverageDifficultyStatistic(self.dbAccess, self.query))
 		self.addStatistic(DailyTxCountStatistic(self.dbAccess, self.query))
 		self.addStatistic(DailyTxVolumeStatistic(self.dbAccess, self.query))
+		self.addStatistic(DailyHeuristicalTxVolumeStatistic(self.dbAccess, self.query))
 		self.addStatistic(DailyMedianTransactionValueStatistic(self.dbAccess, self.query))
 		self.addStatistic(DailyActiveAddressesStatistic(self.dbAccess, self.query))
 		self.addStatistic(DailyFeesStatistic(self.dbAccess, self.query))
@@ -129,8 +135,7 @@ class DailyAggregator(object):
 		self.addStatistic(DailyPaymentCountStatistic(self.dbAccess, self.query))
 		self.addStatistic(DailyRewardStatistic(self.dbAccess, self.query))
 		self.addStatistic(DailyBlockSizeStatistic(self.dbAccess, self.query))
-
-		self.addStatistic(DailyHeuristicalTxVolumeStatistic(self.dbAccess, self.query), "heuristic")
+		self.addStatistic(DailyBlockCountStatistic(self.dbAccess, self.query))
 
 	def addGroup(self, name):
 		if name not in self.groups:
@@ -175,9 +180,16 @@ class DailyAggregator(object):
 
 		datesAndStats = [(missingDate, statList) for missingDate, statList in datesToStatMap.iteritems()]
 		datesAndStats = sorted(datesAndStats, key=lambda pair: pair[0])
+		if len(datesAndStats) == 0:
+			return
+			
+		eta = ETA(len(datesAndStats), 60, 10)
 		for missingDate, statList in datesAndStats:
+			eta.workStarted()
+			print "date: %s" % missingDate
 			for stat in statList:
 				stat.runOn(missingDate, shouldSave)
+			eta.workFinished(1)
 
 	def compile(self, group="default"):
 		assert(group in self.groups)

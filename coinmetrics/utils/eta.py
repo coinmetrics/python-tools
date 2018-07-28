@@ -15,7 +15,7 @@ class ObservationsHistory(object):
 		return sum(self.observations) / len(self.observations)
 
 
-class BlockCollectionETA(object):
+class ETA(object):
 
 	def __init__(self, totalWorkAmount, maxObservations, outputInterval, printPrefix="", silent=False):
 		assert(totalWorkAmount > 0)

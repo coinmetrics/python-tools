@@ -36,6 +36,7 @@ BLOCK_TIMES = {
 	"bch": 600,
 	"xvg": 30,
 	"dcr": 150,
+	"omnilayer": 600,
 }
 
-SUPPORTED_ASSETS = ["btc", "ltc", "vtc", "dash", "doge", "zec", "dgb", "xvg", "pivx", "dcr", "bch", "btg"]
+SUPPORTED_ASSETS = ["btc", "ltc", "vtc", "dash", "doge", "zec", "dgb", "xvg", "pivx", "dcr", "bch", "btg", "omnilayer", "usdt", "maid"]

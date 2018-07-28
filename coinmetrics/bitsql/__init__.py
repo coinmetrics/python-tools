@@ -5,13 +5,18 @@ import traceback
 from datetime import datetime
 from coinmetrics.utils.log import Log
 from coinmetrics.utils import pipelines
-from coinmetrics.utils.eta import BlockCollectionETA
+from coinmetrics.utils.eta import ETA
 from coinmetrics.utils.postgres import PostgresAccess
 from schema import *
 from query import *
 from exporter import *
 from node import *
 from aggregator import *
+from omni.node import OmniNode
+from omni.schema import OmniSchema
+from omni.query import OmniQuery, TetherQuery, MaidSafeCoinQuery
+from omni.exporter import OmniExporter
+from omni.aggregator import OmniManagedPropertyAggregator, OmniCrowdsalePropertyAggregator
 
 def postgresFactory(dbConfig):
 	return PostgresAccess(dbConfig["host"], dbConfig["database"], dbConfig["user"], dbConfig["password"])
@@ -62,6 +67,24 @@ def dbObjectsFactory(asset, db):
 			lambda db, schema: PivxQuery(db, schema), 
 			lambda db, schema: PivxExporter(db, schema),
 			lambda db, query: DailyAggregator(db, query)
+		],
+		"omnilayer": [
+			lambda db: OmniSchema(db),
+			lambda db, schema: OmniQuery(db, schema),
+			lambda db, schema: OmniExporter(db, schema),
+			lambda db, query: None
+		],
+		"usdt": [
+			lambda db: OmniSchema(db),
+			lambda db, schema: TetherQuery(db, schema),
+			lambda db, schema: None,
+			lambda db, query: OmniManagedPropertyAggregator(db, query),		
+		],
+		"maid": [
+			lambda db: OmniSchema(db),
+			lambda db, schema: MaidSafeCoinQuery(db, schema),
+			lambda db, schema: None,
+			lambda db, query: OmniCrowdsalePropertyAggregator(db, query),		
 		]
 	}
 
@@ -89,6 +112,7 @@ def nodeFactory(asset, *args):
 		"zec": lambda: ZcashNode(*args),
 		"pivx": lambda: PivxNode(*args),
 		"dcr": lambda: DecredNode(*args),
+		"omnilayer": lambda: OmniNode(*args),
 	}
 
 	if not asset in registry:
@@ -125,7 +149,7 @@ def runExport(asset, nodeConfig, dbConfig, loop=False, lag=60 * 60 * 2):
 				log.msg("saved block at height: %d (%s)" % (blockData.blockHeight, blockData.blockTime))
 
 			heights = [i + fromHeight for i in xrange(toHeight - fromHeight + 1)]
-			eta = BlockCollectionETA(toHeight - fromHeight + 1, blocksPerWeek, 10)
+			eta = ETA(toHeight - fromHeight + 1, blocksPerWeek, 10)
 			loadPipeline = pipelines.LinearMultithreadedPipeline(8, load, "node")
 			storePipeline = pipelines.LinearMultithreadedPipeline(1, store, "db")
 			pipelines.OrderingConnector(loadPipeline, storePipeline)

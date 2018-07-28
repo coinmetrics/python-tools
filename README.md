@@ -31,3 +31,4 @@ We'll use LTC as an example, due to relatively small size of its blockchain. We 
 * Export blockchain to postgres database by running `python export.py ltc`, the process can take a while.
 * After initial export is completed, vacuum/analyze tables by running `python export.py ltc --vacuum` and then create database indices by running `python export.py ltc --add-index`.
 * Create CSV with aggregated daily statistics by running `python csvgen.py ltc`. 
+* Produced CSV contains only on-chain data denominated in satoshis. CSVs available at coinmetrics.io can be obtained by combining on-chain and price data collected from, for instance, coinmarketcap.com.
