@@ -62,12 +62,19 @@ class ZcashTransactionData(BitcoinTransactionData):
 	def __init__(self, txHash, txSize, txTime, coinbase):
 		super(ZcashTransactionData, self).__init__(txHash, txSize, txTime, coinbase)
 		self.joinSplits = []
+		self.saplingPayments = []
 
 	def getJoinSplits(self):
 		return self.joinSplits
 
+	def getSaplingPayments(self):
+		return self.saplingPayments
+
 	def addJoinSplit(self, joinSplitData):
 		self.joinSplits.append(joinSplitData)
+
+	def addSaplingPayment(self, saplingPayment):
+		self.saplingPayments.append(saplingPayment)
 
 
 class PivxTransactionData(BitcoinTransactionData):

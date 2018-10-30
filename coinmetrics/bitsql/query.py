@@ -337,21 +337,25 @@ class ZcashQuery(BitcoinQuery):
 	def __init__(self, dbAccess, schema):
 		super(ZcashQuery, self).__init__(dbAccess, schema)
 		self.joinSplitsTable = self.schema.getJoinSplitsTableName()
+		self.saplingPaymentTable = self.schema.getSaplingPaymentTableName()
 
 	def getFeesVolumeBetween(self, minDate, maxDate):
 		baseFees = super(ZcashQuery, self).getFeesVolumeBetween(minDate, maxDate)
 		joinSplitDiffs = self.getJoinSplitsDiffValueBetween(minDate, maxDate)
-		return baseFees + joinSplitDiffs
+		saplingValueBalance = self.getSaplingValueBalanceBetween(minDate, maxDate)
+		return baseFees + joinSplitDiffs + saplingValueBalance
 
 	def getOutputVolumeBetween(self, minDate, maxDate):
 		baseResult = super(ZcashQuery, self).getOutputVolumeBetween(minDate, maxDate)
 		joinSplitResult = self.getJoinSplitsNegativeDiffValueBetween(minDate, maxDate)
-		return baseResult + joinSplitResult
+		saplingValueBalance = self.getSaplingNegativeValueBalanceBetween(minDate, maxDate)
+		return baseResult + joinSplitResult + saplingValueBalance
 
 	def getHeuristicalOutputVolumeBetween(self, minDate, maxDate):
 		baseResult = super(ZcashQuery, self).getHeuristicalOutputVolumeBetween(minDate, maxDate)
 		joinSplitResult = self.getJoinSplitsNegativeDiffValueBetween(minDate, maxDate)
-		return baseResult + joinSplitResult		
+		saplingValueBalance = self.getSaplingNegativeValueBalanceBetween(minDate, maxDate)
+		return baseResult + joinSplitResult + saplingValueBalance
 
 	def getJoinSplitsDiffValueBetween(self, minDate, maxDate):
 		result = self.dbAccess.queryReturnOne("\
@@ -369,6 +373,22 @@ class ZcashQuery(BitcoinQuery):
 				(joinsplit_time >= %s AND joinsplit_time < %s)", (minDate, maxDate))
 		return result[0] if result[0] is not None else 0
 
+	def getSaplingValueBalanceBetween(self, minDate, maxDate):
+		result = self.dbAccess.queryReturnOne("\
+			SELECT \
+				sum(sapling_payment_value_balance) AS value \
+			FROM " + self.saplingPaymentTable + " WHERE \
+				(sapling_payment_time >= %s AND sapling_payment_time < %s)", (minDate, maxDate))
+		return result[0] if result[0] is not None else 0
+
+	def getSaplingNegativeValueBalanceBetween(self, minDate, maxDate):
+		result = self.dbAccess.queryReturnOne("\
+			SELECT \
+				sum(-least(sapling_payment_value_balance, 0)) AS value \
+			FROM " + self.saplingPaymentTable + " WHERE \
+				(sapling_payment_time >= %s AND sapling_payment_time < %s)", (minDate, maxDate))
+		return result[0] if result[0] is not None else 0
+
 	def getMedianFeeBetween(self, minDate, maxDate):
 		result = self.dbAccess.queryReturnOne("WITH \
 			joinsplit AS (\
@@ -377,6 +397,12 @@ class ZcashQuery(BitcoinQuery):
 					joinsplit_tx_hash \
 				FROM " + self.joinSplitsTable  + " WHERE \
 					(joinsplit_time >= %s AND joinsplit_time < %s)), \
+			sapling_payment AS (\
+				SELECT \
+					sapling_payment_value_balance as value, \
+					sapling_payment_tx_hash \
+				FROM " + self.saplingPaymentTable + " WHERE \
+					(sapling_payment_time >= %s AND sapling_payment_time < %s)), \
 			o AS (\
 				SELECT \
 					output_tx_hash, \
@@ -414,13 +440,20 @@ class ZcashQuery(BitcoinQuery):
 					t.tx_hash \
 				FROM t JOIN joinsplit ON \
 					t.tx_hash=joinsplit.joinsplit_tx_hash \
+				GROUP BY t.tx_hash \
+				UNION ALL \
+				SELECT \
+					coalesce(sum(sapling_payment.value), 0) AS sum, \
+					t.tx_hash \
+				FROM t JOIN sapling_payment ON \
+					t.tx_hash=sapling_payment.sapling_payment_tx_hash \
 				GROUP BY t.tx_hash), \
 			fees AS (\
 				SELECT \
 					coalesce(sum(so.sum), 0) as fee \
 				FROM so \
 				GROUP BY so.tx_hash) \
-			SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY fee) FROM fees", (minDate, maxDate, minDate, maxDate, minDate, maxDate, minDate, maxDate))
+			SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY fee) FROM fees", (minDate, maxDate, minDate, maxDate, minDate, maxDate, minDate, maxDate, minDate, maxDate))
 		return result[0]
 
 	def getMedianTransactionValueBetween(self, minDate, maxDate):
@@ -431,6 +464,12 @@ class ZcashQuery(BitcoinQuery):
 					joinsplit_tx_hash \
 				FROM " + self.joinSplitsTable  + " WHERE \
 					(joinsplit_time >= %s AND joinsplit_time < %s)), \
+			sapling_payment AS (\
+				SELECT \
+					-least(sapling_payment_value_balance, 0) as value, \
+					sapling_payment_tx_hash \
+				FROM " + self.saplingPaymentTable + " WHERE \
+					(sapling_payment_time >= %s AND sapling_payment_time < %s)), \
 			o AS (\
 				SELECT \
 					output_tx_hash, \
@@ -453,8 +492,8 @@ class ZcashQuery(BitcoinQuery):
 				 	(tx_time >= %s AND tx_time < %s) AND tx_coinbase=false), \
 			so AS (\
 				SELECT \
-					coalesce(sum(o.output_value_satoshi), 0) as sum_outputs, \
-					t.tx_hash \
+					coalesce(sum(o.output_value_satoshi), 0) as partial_sum, \
+					t.tx_hash as tx_hash \
 				FROM t JOIN o ON \
 					t.tx_hash=o.output_tx_hash \
 				WHERE (o.output_tx_hash, o.output_index) NOT IN (\
@@ -468,18 +507,63 @@ class ZcashQuery(BitcoinQuery):
 					GROUP BY t.tx_hash), \
 			sj AS (\
 				SELECT \
-					coalesce(sum(joinsplit.value), 0) as sum_joinsplit, \
-					t.tx_hash \
+					coalesce(sum(joinsplit.value), 0) as partial_sum, \
+					t.tx_hash as tx_hash \
 				FROM t JOIN joinsplit ON \
 					t.tx_hash=joinsplit.joinsplit_tx_hash \
 				GROUP BY t.tx_hash), \
-			total AS (\
-				SELECT\
-				 	(coalesce(so.sum_outputs, 0) + coalesce(sj.sum_joinsplit, 0)) as sum_total \
-				FROM so FULL OUTER JOIN sj ON \
-				 	so.tx_hash=sj.tx_hash) \
-			SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY sum_total) FROM total", (minDate, maxDate, minDate, maxDate, minDate, maxDate, minDate, maxDate))
+			ssp AS (\
+				SELECT \
+					coalesce(sum(sapling_payment.value), 0) as partial_sum, \
+					t.tx_hash as tx_hash \
+				FROM t JOIN sapling_payment ON \
+					t.tx_hash=sapling_payment.sapling_payment_tx_hash \
+				GROUP BY t.tx_hash), \
+			sall AS (\
+				SELECT * FROM sj UNION ALL \
+				SELECT * FROM so UNION ALL \
+				SELECT * FROM ssp \
+			), \
+			total AS (SELECT sum(partial_sum) AS sum_total, tx_hash FROM sall GROUP BY tx_hash) \
+			SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY sum_total) FROM total", (minDate, maxDate, minDate, maxDate, minDate, maxDate, minDate, maxDate, minDate, maxDate))
 		return result[0]
+
+	def getPaymentCountBetween(self, minDate, maxDate):
+		result = self.dbAccess.queryReturnOne("WITH \
+			o AS (\
+				SELECT \
+					output_tx_hash, \
+					output_value_satoshi \
+				FROM " + self.outputsTable + " WHERE \
+					(output_time_created >= %s AND output_time_created < %s) AND output_type>1), \
+			sapling_payment AS (\
+				SELECT \
+					sapling_payment_output_count as output_count, \
+					sapling_payment_tx_hash \
+				FROM " + self.saplingPaymentTable + " WHERE \
+					(sapling_payment_time >= %s AND sapling_payment_time < %s)), \
+			t AS (\
+				SELECT \
+					tx_hash \
+				FROM " + self.txTable + " WHERE \
+					(tx_time >= %s AND tx_time < %s) AND tx_coinbase=false), \
+			all_outputs AS (\
+				SELECT \
+					count(*) as output_count, \
+					t.tx_hash \
+				FROM t JOIN o ON \
+					t.tx_hash=o.output_tx_hash \
+				GROUP BY t.tx_hash \
+				UNION ALL \
+				SELECT \
+					sum(sapling_payment.output_count) as output_count, \
+					t.tx_hash \
+				FROM t JOIN sapling_payment ON \
+					t.tx_hash=sapling_payment.sapling_payment_tx_hash \
+				GROUP BY t.tx_hash), \
+			total AS (SELECT greatest(sum(output_count) - 1, 0) as payments FROM all_outputs GROUP BY tx_hash) \
+			SELECT sum(payments) FROM total", (minDate, maxDate, minDate, maxDate, minDate, maxDate))
+		return result[0] if result[0] is not None else 0
 
 
 class PivxQuery(BitcoinQuery):

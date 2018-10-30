@@ -155,6 +155,7 @@ class BitcoinNode(BitcoinNodeBase):
 			return False
 
 # joinsplits: 3306, 3308
+# sapling payments: b17707e9daff8c39bba43c3d0986c231d9bb7f8c62dd961d61f79def6fd8b85d 5582ac303b6ecbd2af0c94a6cb6259a237818defceaccfdf961b5eefa79eb5eb
 class ZcashNode(BitcoinNodeBase):
 	
 	def getTransactionSize(self, txDict):
@@ -171,6 +172,17 @@ class ZcashNode(BitcoinNodeBase):
 			valueOld = outputValueToSatoshis(joinSplit["vpub_old"])
 			valueNew = outputValueToSatoshis(joinSplit["vpub_new"])
 			transaction.addJoinSplit((valueOld, valueNew))
+
+		if ("vShieldedSpend" in txDict) or ("vShieldedOutput" in txDict):
+			shieldedInputCount = len(txDict["vShieldedSpend"])
+			shieldedOutputCount = len(txDict["vShieldedOutput"])
+			if shieldedInputCount > 0 or shieldedOutputCount > 0:
+				valueBalanceString = txDict["valueBalance"]
+				if valueBalanceString[0] == "-":
+					valueBalance = -outputValueToSatoshis(txDict["valueBalance"][1:])
+				else:
+					valueBalance = outputValueToSatoshis(txDict["valueBalance"])
+				transaction.addSaplingPayment((shieldedInputCount, shieldedOutputCount, valueBalance))
 		return transaction
 
 

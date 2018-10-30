@@ -35,20 +35,20 @@ class BitcoinSchema(object):
 
 		self.dbAccess.queryNoReturnCommit("CREATE TABLE IF NOT EXISTS %s (\
 			tx_hash DECIMAL(%s) PRIMARY KEY, \
-			tx_block_hash DECIMAL(%s) references %s(block_hash) ON DELETE CASCADE, \
+			tx_block_hash DECIMAL(%s) references %s(block_hash), \
 			tx_size INTEGER, \
 			tx_time TIMESTAMP, \
 			tx_coinbase BOOLEAN \
 			)" % (self.transactionsTableName, HASH_PRECISION, HASH_PRECISION, self.blocksTableName))
 
 		self.dbAccess.queryNoReturnCommit("CREATE TABLE IF NOT EXISTS %s (\
-			output_tx_hash DECIMAL(%s) references %s(tx_hash) ON DELETE CASCADE, \
+			output_tx_hash DECIMAL(%s) references %s(tx_hash), \
 			output_index INTEGER, \
 			output_type SMALLINT, \
 			output_addresses VARCHAR(%s)[], \
 			output_script BYTEA, \
 			output_value_satoshi DECIMAL(%s), \
-			output_spending_tx_hash DECIMAL(%s) references %s(tx_hash) ON DELETE CASCADE, \
+			output_spending_tx_hash DECIMAL(%s) references %s(tx_hash), \
 			output_time_created TIMESTAMP, \
 			output_time_spent TIMESTAMP, \
 			PRIMARY KEY(output_tx_hash, output_index)\
@@ -86,6 +86,9 @@ class ZcashSchema(BitcoinSchema):
 	def getJoinSplitsTableName(self):
 		return self.joinSplitsTableName
 
+	def getSaplingPaymentTableName(self):
+		return self.saplingPaymentTableName
+
 	def init(self):
 		super(ZcashSchema, self).init()
 		self.joinSplitsTableName = "joinsplits_" + self.asset
@@ -94,8 +97,18 @@ class ZcashSchema(BitcoinSchema):
 			joinsplit_tx_hash DECIMAL(%s) references %s(tx_hash), \
 			joinsplit_value_old DECIMAL(%s), \
 			joinsplit_value_new DECIMAL(%s), \
-			joinsplit_time TIMESTAMP\
+			joinsplit_time TIMESTAMP \
 			)" % (self.joinSplitsTableName, HASH_PRECISION, self.transactionsTableName, OUTPUT_VALUE_PRECISION, OUTPUT_VALUE_PRECISION))
+		
+		self.saplingPaymentTableName = "sapling_payments_" + self.asset
+		self.dbAccess.queryNoReturnCommit("CREATE TABLE IF NOT EXISTS %s (\
+			sapling_payment_tx_hash DECIMAL(%s) references %s(tx_hash), \
+			sapling_payment_value_balance DECIMAL(%s), \
+			sapling_payment_input_count INTEGER, \
+			sapling_payment_output_count INTEGER, \
+			sapling_payment_time TIMESTAMP, \
+			PRIMARY KEY(sapling_payment_tx_hash) \
+		)" % (self.saplingPaymentTableName, HASH_PRECISION, self.transactionsTableName, OUTPUT_VALUE_PRECISION))
 
 	def drop(self):
 		self.dbAccess.queryNoReturnCommit("DROP TABLE IF EXISTS %s" % (self.joinSplitsTableName,))
@@ -104,8 +117,10 @@ class ZcashSchema(BitcoinSchema):
 	def addIndexes(self):
 		super(ZcashSchema, self).addIndexes()
 		self.dbAccess.queryNoReturnCommit("CREATE INDEX joinsplit_time_index_%s ON joinsplits_%s(joinsplit_time)" % (self.asset, self.asset))
+		self.dbAccess.queryNoReturnCommit("CREATE INDEX sapling_payment_time_index_%s ON sapling_payments_%s(sapling_payment_time)" % (self.asset, self.asset))
 
 	def dropIndexes(self):
+		self.dbAccess.queryNoReturnCommit("DROP INDEX IF EXISTS sapling_payment_time")
 		self.dbAccess.queryNoReturnCommit("DROP INDEX IF EXISTS joinsplit_time_index_%s" % (self.asset,))
 		super(ZcashSchema, self).dropIndexes()
 

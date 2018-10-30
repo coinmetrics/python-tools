@@ -82,6 +82,10 @@ class ZcashExporter(BitcoinExporter):
 				self.dbAccess.queryNoReturnNoCommit("INSERT INTO " + self.schema.getJoinSplitsTableName() + "\
 				 	(joinsplit_tx_hash, joinsplit_value_old, joinsplit_value_new, joinsplit_time) \
 				 	VALUES (%s, %s, %s, %s)", (tx.txHash, valueOld, valueNew, tx.txTime))
+			for inputCount, outputCount, valueBalance in tx.getSaplingPayments():
+				self.dbAccess.queryNoReturnNoCommit("INSERT INTO " + self.schema.getSaplingPaymentTableName() + "\
+					(sapling_payment_tx_hash, sapling_payment_input_count, sapling_payment_output_count, sapling_payment_value_balance, sapling_payment_time) \
+					VALUES (%s, %s, %s, %s, %s)", (tx.txHash, inputCount, outputCount, valueBalance, tx.txTime))
 
 
 class PivxExporter(BitcoinExporter):
