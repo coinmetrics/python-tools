@@ -1,4 +1,8 @@
 *.pyc
+*.sublime-project
+*.sublime-workspace
+dev.py
+.mypy_cache/*
 *.csv
-*.csv#
-*.json
+venv/
+.idea/
